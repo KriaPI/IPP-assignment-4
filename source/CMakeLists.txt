@@ -1,5 +1,5 @@
-add_executable(exercise1 
-    exercise-1/exercise1.cpp
+add_executable(hello 
+    hello.cpp
 )
 
-target_link_libraries(exercise1 MPI::MPI_CXX)   
+target_link_libraries(hello MPI::MPI_CXX)   
