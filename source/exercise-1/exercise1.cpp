@@ -1,6 +1,11 @@
-#include <iostream>
+#include <stdio.h>
+#include <string.h>
+#include "mpi.h"
 
-int main() {
-    std::cout << "Hello Exercise 1!\n";
+
+int main(int argc, char *argv[]) {
+    MPI_Init(&argc, &argv);
+    printf("Hello world!\n");    
+    MPI_Finalize();
     return 0;
 }

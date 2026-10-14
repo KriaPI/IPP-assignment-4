@@ -9,6 +9,9 @@ include(default_compiler_flags)
 include(sanitizers)
 include(coverage)
 
+
+find_package(MPI REQUIRED)
+
 # include(FetchContent)
 # FetchContent_Declare(googletest
 #   GIT_REPOSITORY https://github.com/google/googletest.git
