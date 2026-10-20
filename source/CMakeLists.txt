@@ -11,5 +11,5 @@ add_executable(ex1bcast
 )
 
 target_link_libraries(hello MPI::MPI_CXX)  
-target_link_libraries(ex1send MPI::MPI_CXX)   
+target_link_libraries(ex1send MPI::MPI_CXX)
 target_link_libraries(ex1bcast MPI::MPI_CXX)   

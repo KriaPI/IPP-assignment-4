@@ -1,28 +1,27 @@
 #include <mpi.h>
 #include <mpi_proto.h>
-
 #include <algorithm>
+#include <cmath>
 #include <format>
 #include <iostream>
-#include <numeric>
 #include <vector>
 
-// TODO: add timing for benchmarking
+bool isPrime(int num) {
+    if (num <= 1) return false;
+    for (int i = 2; i <= std::sqrt(num); i++) {
+        if (num % i == 0) return false;
+    }
+    return true;
+}
 
-void getMaxValue(int& rank, int& worldSize, int& maxValue) {
+void getMaxValue(int rank, int& maxValue) {
     if (rank == 0) {
         std::cout << "Enter the maximum value: ";
         std::cin >> maxValue;
-
-        // Send maxValue to all processes.
-        for (int destination = 1; destination < worldSize; ++destination) {
-            MPI_Send(&maxValue, 1, MPI_INT, destination, 0, MPI_COMM_WORLD);
-        }
-    } else {
-        // recieve
-        MPI_Recv(&maxValue, 1, MPI_INT, 0, 0, MPI_COMM_WORLD,
-                 MPI_STATUS_IGNORE);
     }
+
+    // Send maxValue to all processes
+    MPI_Bcast(&maxValue, 1, MPI_INT, 0, MPI_COMM_WORLD);
 }
 
 int main() {
@@ -34,83 +33,105 @@ int main() {
     int worldSize{0};
     MPI_Comm_size(MPI_COMM_WORLD, &worldSize);
 
-    int maxValue{};
-    getMaxValue(rank, worldSize, maxValue);
-    std::cout << std::format("process {} has maxvalue {}\n", rank, maxValue);
+    int maxValue {0};
+    getMaxValue(rank, maxValue);
+    int sqrtMaxValue = std::sqrt(maxValue);
 
-    auto localChunkSize =
-        rank == 0 ? maxValue / worldSize - 2 : maxValue / worldSize;
-    if (rank == worldSize - 1) {
-        localChunkSize += maxValue % worldSize;
-    }
-    auto localLowerBound = rank == 0 ? 2 : (maxValue / worldSize) * rank;
-    auto localUpperBound = rank == worldSize - 1
-                               ? localLowerBound + localChunkSize
-                               : localLowerBound + localChunkSize - 1;
-
-    std::cout << std::format(
-        "Local chunk size, lower bound, upper bound: {}, {}, {}\n",
-        localChunkSize, localLowerBound, localUpperBound);
-
-    std::vector<int> seeds(localChunkSize);
-    std::iota(seeds.begin(), seeds.end(), localLowerBound);
-    std::vector<char> marked(localChunkSize, 0);
-    std::cout << "Marked size: " << marked.size() << "\n";
-
-    for (int seed : seeds) {
-        int correctedLowerBound = std::max(localLowerBound, seed * seed);
-        std::cout << "Corrected Lower Bound: " << correctedLowerBound << std::endl;
-        int remainder = correctedLowerBound % seed;
-        int firstMultiple = correctedLowerBound - remainder + seed * (remainder != 0);
-
-        std::cout << "First multiple: " << firstMultiple << std::endl;
-
-        for (int multiple = firstMultiple; multiple < localUpperBound; multiple += seed) {
-            std::cout << "Multiple: " << multiple << std::endl;
-            marked[multiple - 1] = 1;
+    // primes up to sqrt, computed on root then shared
+    std::vector<int> seeds;
+    if (rank == 0) {
+        for (int it = 2; it <= sqrtMaxValue; ++it) {
+            if (isPrime(it)) {
+                seeds.push_back(it);
+            }
         }
     }
 
-    std::vector<int> primes;
+    int seedCount = static_cast<int>(seeds.size());
+    MPI_Bcast(&seedCount, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-    auto markedIt{marked.begin()};
-    auto seedIt{seeds.begin()};
-    for (; markedIt != marked.end() && seedIt != seeds.end(); ++markedIt, ++seedIt) {
-        if (*markedIt == 0) {
-            std::cout << std::format("prime {}\n", *seedIt);
-            primes.push_back(*seedIt);
+    if (rank == 0) {
+        for (int i = 1; i < worldSize; ++i) {
+            MPI_Send(&seedCount, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+            MPI_Send(seeds.data(), seedCount, MPI_INT, i, 0, MPI_COMM_WORLD);
+        }
+    } else {
+        MPI_Recv(&seedCount, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+        seeds.resize(seedCount);
+        MPI_Recv(seeds.data(), seedCount, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
+
+    int parallelLowerBound = sqrtMaxValue + 1;
+    int parallelUpperBound = maxValue + 1;
+
+    int range = parallelUpperBound - parallelLowerBound;
+    int chunkSize = range / worldSize;
+    int remainingSize = range % worldSize;
+
+    int localLowerBound =
+        parallelLowerBound + rank * chunkSize + std::min(rank, remainingSize);
+    int localChunkSize = chunkSize + (rank < remainingSize ? 1 : 0);
+    int localUpperBound = localLowerBound + localChunkSize;
+
+
+    std::vector<char> marked(localChunkSize, 0);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    double start = MPI_Wtime();
+
+    for (int seed : seeds) {
+        int correctedLowerBound = std::max(localLowerBound, seed * seed);
+        if (correctedLowerBound >= localUpperBound) continue;
+
+        int remainder = correctedLowerBound % seed;
+        int firstMultiple =
+            correctedLowerBound - remainder + seed * (remainder != 0);
+
+        for (int multiple = firstMultiple; multiple < localUpperBound;
+             multiple += seed) {
+            marked[multiple - localLowerBound] = 1;
+        }
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    double elapsedMs = (MPI_Wtime() - start) * 1000.0;
+
+    std::vector<int> primes;
+    if (rank == 0) {
+        primes = seeds;
+    }
+
+    for (int i = 0; i < localChunkSize; ++i) {
+        if (marked[i] == 0) {
+            primes.push_back(localLowerBound + i);
         }
     }
 
     if (rank != 0) {
-        // TODO: make a vector of prime numbers.
-        // TODO: send prime numbers to root process.
         MPI_Send(primes.data(), primes.size(), MPI_INT, 0, 0, MPI_COMM_WORLD);
     } else {
-        // TODO: print out primes in root process.
         for (int source = 1; source < worldSize; ++source) {
-            // TODO: probe and find out how many values are sent.
-            // TODO: reserve vector space
-            // TODO: receive and store in the appropriate place in the vector.
             MPI_Status status{};
             int count{0};
             MPI_Probe(source, 0, MPI_COMM_WORLD, &status);
             MPI_Get_count(&status, MPI_INT, &count);
-            primes.reserve(primes.size() + count);
 
-            std::cout << "Primes Get Count: " << count << std::endl;
-            MPI_Recv(primes.data() + primes.size(), count, MPI_INT, source, 0,
+            int offset = static_cast<int>(primes.size());
+            primes.resize(offset + count);
+
+            MPI_Recv(primes.data() + offset, count, MPI_INT, source, 0,
                      MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
     }
 
     if (rank == 0) {
-        std::cout << "\n\nParallelly computed prime values: ";
-        std::cout << std::format("Prime count {}\n", primes.size());
-
-        for (auto& prime : primes) {
+        std::cout << std::format("Primes: {} \n\n", primes.size());
+        for (auto& prime: primes) {
             std::cout << std::format("{}, ", prime);
         }
+
+        std::cout << "\nExecution time: " << elapsedMs << " ms\n";
     }
 
     MPI_Finalize();

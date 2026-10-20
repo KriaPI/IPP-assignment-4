@@ -39,11 +39,8 @@ int main() {
 
     int parallelLowerBound = sqrtMaxValue + 1;
     int parallelUpperBound = maxValue+1;
-
     int chunkSize = (parallelUpperBound - parallelLowerBound) / threadCount;
-
     int remainingSize = (parallelUpperBound - parallelLowerBound) % threadCount;
-
     int currentLowerBound = parallelLowerBound;
 
     auto start = std::chrono::high_resolution_clock::now();
