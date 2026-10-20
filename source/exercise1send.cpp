@@ -127,9 +127,9 @@ int main() {
 
     if (rank == 0) {
         std::cout << std::format("Primes: {} \n\n", primes.size());
-        for (auto& prime: primes) {
-            std::cout << std::format("{}, ", prime);
-        }
+        // for (auto& prime: primes) {
+        //     std::cout << std::format("{}, ", prime);
+        // }
 
         std::cout << "\nExecution time: " << elapsedMs << " ms\n";
     }

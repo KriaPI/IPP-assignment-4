@@ -1,4 +1,5 @@
 #include <mpi.h>
+#include <mpi_proto.h>
 #include <algorithm>
 #include <cmath>
 #include <format>
@@ -99,28 +100,35 @@ int main() {
         }
     }
 
-    if (rank != 0) {
-        MPI_Send(primes.data(), primes.size(), MPI_INT, 0, 0, MPI_COMM_WORLD);
-    } else {
-        for (int source = 1; source < worldSize; ++source) {
-            MPI_Status status{};
-            int count{0};
-            MPI_Probe(source, 0, MPI_COMM_WORLD, &status);
-            MPI_Get_count(&status, MPI_INT, &count);
 
-            int offset = static_cast<int>(primes.size());
-            primes.resize(offset + count);
-
-            MPI_Recv(primes.data() + offset, count, MPI_INT, source, 0,
-                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        }
+    // TODO: reduce to get the number of primes, resize the primes array, and use gather.
+    int localPrimeCount {static_cast<int>(primes.size())};
+    int totalPrimes {0};
+    MPI_Reduce(&localPrimeCount, &totalPrimes, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+    
+    std::vector<int> allPrimes;
+    if (rank == 0) {
+        allPrimes.resize(totalPrimes);
+    }
+    
+    // TODO: mpi gather and then mpi gatherv
+    std::vector<int> primesPerProcess (worldSize);
+    MPI_Gather(&localPrimeCount, 1, MPI_INT, primesPerProcess.data(), 1, MPI_INT, 0, MPI_COMM_WORLD);
+    
+    std::vector<int> displacements;
+    int currentIndex {0};
+    for (const auto& length: primesPerProcess) {
+        displacements.emplace_back(currentIndex);
+        currentIndex += length;
     }
 
+    MPI_Gatherv(primes.data(), localPrimeCount, MPI_INT, allPrimes.data(), primesPerProcess.data(), displacements.data(), MPI_INT, 0, MPI_COMM_WORLD);
+
     if (rank == 0) {
-        std::cout << std::format("Primes: {} \n\n", primes.size());
-        for (auto& prime: primes) {
-            std::cout << std::format("{}, ", prime);
-        }
+        std::cout << std::format("Primes: {} \n\n", allPrimes.size());
+        // for (auto& prime: allPrimes) {
+        //     std::cout << std::format("{}, ", prime);
+        // }
 
         std::cout << "\nExecution time: " << elapsedMs << " ms\n";
     }
