@@ -125,9 +125,14 @@ int main() {
 
     if (rank == 0) {
         std::cout << std::format("Primes: {} \n\n", allPrimes.size());
-        // for (auto& prime: allPrimes) {
-        //     std::cout << std::format("{}, ", prime);
-        // }
+        
+        for(auto& seed: seeds) {
+            std::cout << std::format("{}, ", seed);
+        }
+
+        for (auto& prime: allPrimes) {
+            std::cout << std::format("{}, ", prime);
+        }
 
         std::cout << "\nExecution time: " << elapsedMs << " ms\n";
     }

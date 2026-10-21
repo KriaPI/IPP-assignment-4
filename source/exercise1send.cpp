@@ -47,7 +47,6 @@ int main() {
     }
 
     int seedCount = static_cast<int>(seeds.size());
-    MPI_Bcast(&seedCount, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
     if (rank == 0) {
         for (int i = 1; i < worldSize; ++i) {
@@ -126,9 +125,13 @@ int main() {
 
     if (rank == 0) {
         std::cout << std::format("Primes: {} \n\n", primes.size());
-        // for (auto& prime: primes) {
-        //     std::cout << std::format("{}, ", prime);
-        // }
+        for(auto& seed: seeds) {
+            std::cout << std::format("{}, ", seed);
+        }
+        
+        for (auto& prime: primes) {
+            std::cout << std::format("{}, ", prime);
+        }
 
         std::cout << "\nExecution time: " << elapsedMs << " ms\n";
     }
