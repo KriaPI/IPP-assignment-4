@@ -13,14 +13,20 @@ bool isPrime(int num) {
     return true;
 }
 
-void getMaxValue(int rank, int& maxValue) {
+void getMaxValue(int rank, int& maxValue, int worldSize) {
     if (rank == 0) {
         std::cout << "Enter the maximum value: ";
         std::cin >> maxValue;
     }
 
     // Send maxValue to all processes
-    MPI_Bcast(&maxValue, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    if(rank == 0) {
+        for(int i = 1; i < worldSize; ++i) {
+            MPI_Send(&maxValue, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+        }
+    } else {
+        MPI_Recv(&maxValue, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
 }
 
 int main() {
@@ -33,7 +39,7 @@ int main() {
     MPI_Comm_size(MPI_COMM_WORLD, &worldSize);
 
     int maxValue {0};
-    getMaxValue(rank, maxValue);
+    getMaxValue(rank, maxValue, worldSize);
     int sqrtMaxValue = std::sqrt(maxValue);
 
     // primes up to sqrt, computed on root then shared
@@ -128,7 +134,7 @@ int main() {
         for(auto& seed: seeds) {
             std::cout << std::format("{}, ", seed);
         }
-        
+
         for (auto& prime: primes) {
             std::cout << std::format("{}, ", prime);
         }
