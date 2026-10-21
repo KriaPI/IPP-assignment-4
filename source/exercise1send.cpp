@@ -1,5 +1,4 @@
 #include <mpi.h>
-#include <mpi_proto.h>
 #include <algorithm>
 #include <cmath>
 #include <format>
